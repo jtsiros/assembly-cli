@@ -1,12 +1,6 @@
-use std::{
-    env,
-    io::{self, ErrorKind},
-    process,
-    thread::sleep,
-    time::Duration,
-};
+use std::{env, fs, thread::sleep, time::Duration};
 
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
 use dotenv::dotenv;
 use reqwest::{
     blocking::Client,
@@ -24,7 +18,7 @@ struct Args {
     transcript_id: Option<String>,
 }
 
-fn main() {
+fn main() -> Result<()> {
     dotenv().ok();
     // get audio_url argument to pass to assembly API
     let args = Args::from_args();
@@ -49,20 +43,13 @@ fn main() {
     let mut t_id: Option<String> = args.transcript_id;
 
     if let Some(audio_url) = &args.audio_url {
-        t_id = match transcribe(&client, &headers, audio_url, &transcript_url) {
-            Ok(t_id) => Some(t_id),
-            Err(e) => {
-                eprintln!("ERROR: {e}");
-                None
-            }
-        };
+        t_id = Some(transcribe(&client, &headers, audio_url, &transcript_url)?);
     }
     if let Some(transcript_id) = t_id {
         println!("waiting for transcription to finish...");
-        poll_for_completion(&client, transcript_id, &headers, transcript_url);
-    } else {
-        process::exit(1);
+        poll_for_completion(&client, transcript_id, &headers, transcript_url)?;
     }
+    Ok(())
 }
 
 /// Sends an audio transcription request to a specified URL and retrieves the transcription ID from the response.
@@ -107,23 +94,18 @@ where
         .headers(headers.clone())
         .json(&data)
         .send()
-        .expect("err posting to transcript endpoint");
+        .context("err posting to transcript endpoint")?;
 
     let parsed_json = response.json::<Value>().map_err(|e| {
         eprintln!("ERROR: could not read body of response: {}", e);
         e
     })?;
 
-    Ok(parsed_json
+    parsed_json
         .get("id")
         .and_then(|v| v.as_str())
         .map(String::from)
-        .ok_or_else(|| {
-            io::Error::new(
-                ErrorKind::NotFound,
-                format!("'id' key not found in response body: {:?}", parsed_json),
-            )
-        })?)
+        .ok_or_else(|| anyhow!("'id' key not found in response body: {:?}", parsed_json))
 }
 
 fn poll_for_completion<S: AsRef<str>>(
@@ -131,7 +113,7 @@ fn poll_for_completion<S: AsRef<str>>(
     transcript_id: S,
     headers: &HeaderMap,
     transcript_url: S,
-) {
+) -> Result<()> {
     let polling_endpoint = format!(
         "{transcript_url}/{id}",
         transcript_url = transcript_url.as_ref(),
@@ -142,26 +124,34 @@ fn poll_for_completion<S: AsRef<str>>(
             .get(&polling_endpoint)
             .headers(headers.clone())
             .send()
-            .expect("err get: transcript response");
+            .context("err get: transcript response")?;
 
         let transcript_data: Value = transcript_res
             .json()
-            .expect("could not read body of poll request");
+            .context("could not read body of poll request")?;
 
-        let status = transcript_data.get("status").expect("status not present");
-        match status.as_str().expect("status as str") {
-            "completed" => {
-                println!("{data}", data = transcript_data);
-                break;
-            }
+        let status = transcript_data
+            .get("status")
+            .context("status not present")?;
+        match status.as_str().context("status as str")? {
+            "completed" => return write_to_file(transcript_id.as_ref(), &transcript_data),
             "error" => {
-                eprintln!(
-                    "ERROR: {}",
-                    transcript_data.get("error").expect("error not present")
-                );
-                break;
+                return Err(anyhow!(transcript_data
+                    .get("error")
+                    .context("error not present")?
+                    .clone()));
             }
             _ => sleep(Duration::from_secs(10)),
         };
     }
+}
+
+fn write_to_file(transcription_id: &str, content: &Value) -> Result<()> {
+    let pretty_json = serde_json::to_string_pretty(content)?;
+    let file_name = format!("{}.json", transcription_id);
+    let current_dir = env::current_dir()?;
+
+    let file_path = current_dir.join(file_name);
+    fs::write(file_path, pretty_json)?;
+    Ok(())
 }

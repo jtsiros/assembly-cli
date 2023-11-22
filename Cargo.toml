@@ -13,3 +13,6 @@ structopt = "0.3.26"
 dotenv = "0.15.0"
 colored = "2.0.4"
 anyhow = "1.0.75"
+
+[profile.release]
+debug = true
