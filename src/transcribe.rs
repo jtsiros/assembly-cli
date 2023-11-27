@@ -1,9 +1,15 @@
 use std::{env, fs, thread::sleep, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::{
+    blocking::Client,
+    header::{HeaderMap, HeaderValue},
+};
 use serde_json::{json, Value};
 
+use crate::cli::TranscriberArgs;
+
+/// A client for interacting with the AssemblyAI transcription service.
 pub struct Transcriber<S>
 where
     S: AsRef<str>,
@@ -17,6 +23,7 @@ impl<S> Transcriber<S>
 where
     S: AsRef<str>,
 {
+    /// Creates a new `Transcriber` instance.
     pub fn new(client: reqwest::blocking::Client, token: S, api_url: S) -> Self {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -86,6 +93,7 @@ where
             .ok_or_else(|| anyhow!("'id' key not found in response body: {:?}", parsed_json))
     }
 
+    /// Polls the transcription service endpoint until the transcription is complete.
     pub fn wait_for_transcription(&self, transcript_id: S) -> Result<()> {
         let polling_endpoint = format!(
             "{transcript_url}/{id}",
@@ -121,6 +129,7 @@ where
     }
 }
 
+/// Writes the transcription data to a file.
 fn write_to_file(transcription_id: &str, content: &Value) -> Result<()> {
     let pretty_json = serde_json::to_string_pretty(content)?;
     let file_name = format!("{}.json", transcription_id);
@@ -128,5 +137,27 @@ fn write_to_file(transcription_id: &str, content: &Value) -> Result<()> {
 
     let file_path = current_dir.join(file_name);
     fs::write(file_path, pretty_json)?;
+    Ok(())
+}
+
+/// Runs the transcription process.
+pub fn run<S: AsRef<str>>(token: S, args: TranscriberArgs) -> Result<()> {
+    let transcript_url = env::var("TRANSCRIPT_URL").expect("TRANSCRIPT_URL expected");
+
+    let client = Client::new();
+    let transcriber = Transcriber::new(client, token.as_ref(), &transcript_url);
+
+    // transcript ID - either passed in as an arg, or
+    // we need to post recording, then get transcript to continue
+    let mut t_id: Option<String> = args.transcript_id;
+
+    if let Some(audio_url) = &args.audio_url {
+        t_id = transcriber.transcribe(audio_url, &transcript_url)?.into();
+    }
+    if let Some(transcript_id) = t_id {
+        println!("Using transcript ID: {}", transcript_id);
+        println!("waiting for transcription results...");
+        transcriber.wait_for_transcription(&transcript_id)?;
+    }
     Ok(())
 }
