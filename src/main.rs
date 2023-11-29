@@ -1,5 +1,6 @@
 use std::env;
 
+use anyhow::anyhow;
 use anyhow::Result;
 use clap::Parser;
 use cli::AssemblyCLI;
@@ -11,7 +12,7 @@ mod transcribe;
 
 fn main() -> Result<()> {
     dotenv().ok();
-    let api_token = env::var("API_TOKEN").expect("API_TOKEN expected");
+    let api_token = env::var("API_TOKEN").map_err(|_| anyhow!("API_TOKEN not set."))?;
 
     match AssemblyCLI::parse() {
         AssemblyCLI::Transcribe(args) => transcribe::run(api_token, args),

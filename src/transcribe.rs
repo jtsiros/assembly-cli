@@ -142,7 +142,8 @@ fn write_to_file(transcription_id: &str, content: &Value) -> Result<()> {
 
 /// Runs the transcription process.
 pub fn run<S: AsRef<str>>(token: S, args: TranscriberArgs) -> Result<()> {
-    let transcript_url = env::var("TRANSCRIPT_URL").expect("TRANSCRIPT_URL expected");
+    let transcript_url =
+        env::var("TRANSCRIPT_URL").map_err(|_| anyhow!("TRANSCRIPT_URL not set."))?;
 
     let client = Client::new();
     let transcriber = Transcriber::new(client, token.as_ref(), &transcript_url);
