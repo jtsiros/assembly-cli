@@ -103,7 +103,6 @@ pub fn run<S: AsRef<str>>(token: S, args: QuestionArgs) -> Result<()> {
 
     let client = Client::new();
     let qa = QuestionAnswer::new(client, token, api_url);
-
     let questions = read_questions_from_file(args.questions_file_path)?;
     qa.ask(args.transcript_id, questions)
 }
@@ -113,7 +112,7 @@ fn read_questions_from_file(file_path: std::path::PathBuf) -> Result<Vec<Questio
     let file_content = fs::read_to_string(file_path.clone()).map_err(|e| {
         io::Error::new(
             e.kind(),
-            format!("failed to open file {:#?}: {}", file_path.as_os_str(), e),
+            format!("failed to open file {:#?}: {}", file_path, e),
         )
     })?;
     // Deserialize the string to Vec<Question>
