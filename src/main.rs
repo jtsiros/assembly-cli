@@ -15,7 +15,7 @@ fn main() -> Result<()> {
     let api_token = env::var("API_TOKEN").map_err(|_| anyhow!("API_TOKEN not set."))?;
 
     match AssemblyCLI::parse() {
-        AssemblyCLI::Transcribe(args) => transcribe::run(api_token, args),
-        AssemblyCLI::Question(args) => question_answer::run(api_token, args),
+        AssemblyCLI::Transcribe(args) => transcribe::run(&api_token, args),
+        AssemblyCLI::Question(args) => question_answer::run(&api_token, args),
     }
 }

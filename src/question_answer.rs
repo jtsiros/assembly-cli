@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::{env, fs, io};
 
 use crate::cli::QuestionArgs;
@@ -25,25 +26,19 @@ pub struct Answer {
 
 #[derive(Debug)]
 /// A client for interacting with the AssemblyAI question and answer service.
-pub struct QuestionAnswer<S>
-where
-    S: AsRef<str>,
-{
+pub struct QuestionAnswer<S: AsRef<str>> {
     client: reqwest::blocking::Client,
     headers: HeaderMap,
     api_url: S,
 }
 
-impl<S> QuestionAnswer<S>
-where
-    S: AsRef<str>,
-{
+impl<S: AsRef<str>> QuestionAnswer<S> {
     /// Creates a new `QuestionAnswer` instance.
-    pub fn new<U: AsRef<str>>(client: reqwest::blocking::Client, token: U, api_url: S) -> Self {
+    pub fn new(client: reqwest::blocking::Client, token: &str, api_url: S) -> Self {
         let mut headers = HeaderMap::new();
         headers.insert(
             reqwest::header::AUTHORIZATION,
-            HeaderValue::from_str(token.as_ref()).expect("api_token as str"),
+            HeaderValue::from_str(token).expect("api_token as str"),
         );
         headers.insert(
             reqwest::header::CONTENT_TYPE,
@@ -98,7 +93,7 @@ where
     }
 }
 
-pub fn run<S: AsRef<str>>(token: S, args: QuestionArgs) -> Result<()> {
+pub fn run(token: &str, args: QuestionArgs) -> Result<()> {
     let api_url = env::var("QUESTION_URL").map_err(|_| anyhow!("QUESTION_URL not set."))?;
 
     let client = Client::new();
@@ -108,11 +103,11 @@ pub fn run<S: AsRef<str>>(token: S, args: QuestionArgs) -> Result<()> {
 }
 
 /// Reads a series of questions from a JSON file.
-fn read_questions_from_file(file_path: std::path::PathBuf) -> Result<Vec<Question>, io::Error> {
-    let file_content = fs::read_to_string(file_path.clone()).map_err(|e| {
+fn read_questions_from_file(file_path: impl AsRef<Path>) -> Result<Vec<Question>, io::Error> {
+    let file_content = fs::read_to_string(file_path.as_ref()).map_err(|e| {
         io::Error::new(
             e.kind(),
-            format!("failed to open file {:#?}: {}", file_path, e),
+            format!("failed to open file {:#?}: {}", file_path.as_ref(), e),
         )
     })?;
     // Deserialize the string to Vec<Question>
