@@ -10,15 +10,15 @@ use serde_json::{json, Value};
 use crate::cli::TranscriberArgs;
 
 /// A client for interacting with the AssemblyAI transcription service.
-pub struct Transcriber<S: AsRef<str>> {
+pub struct Transcriber<'a> {
     client: reqwest::blocking::Client,
     headers: HeaderMap,
-    api_url: S,
+    api_url: &'a str,
 }
 
-impl<S: AsRef<str>> Transcriber<S> {
+impl<'a> Transcriber<'a> {
     /// Creates a new `Transcriber` instance.
-    pub fn new(client: reqwest::blocking::Client, token: &str, api_url: S) -> Self {
+    pub fn new(client: reqwest::blocking::Client, token: &str, api_url: &'a str) -> Self {
         let mut headers = HeaderMap::new();
         headers.insert(
             reqwest::header::AUTHORIZATION,
@@ -45,7 +45,7 @@ impl<S: AsRef<str>> Transcriber<S> {
         });
         let response = self
             .client
-            .post(self.api_url.as_ref())
+            .post(self.api_url)
             .headers(self.headers.clone())
             .json(&data)
             .send()
@@ -67,7 +67,7 @@ impl<S: AsRef<str>> Transcriber<S> {
     pub fn wait_for_transcription(&self, transcript_id: &str) -> Result<()> {
         let polling_endpoint = format!(
             "{transcript_url}/{id}",
-            transcript_url = self.api_url.as_ref(),
+            transcript_url = self.api_url,
             id = transcript_id
         );
         loop {
@@ -116,7 +116,7 @@ pub fn run(token: &str, args: TranscriberArgs) -> Result<()> {
         env::var("TRANSCRIPT_URL").map_err(|_| anyhow!("TRANSCRIPT_URL not set."))?;
 
     let client = Client::new();
-    let transcriber = Transcriber::new(client, token, transcript_url);
+    let transcriber = Transcriber::new(client, token, &transcript_url);
 
     // transcript ID - either passed in as an arg, or
     // we need to post recording, then get transcript to continue

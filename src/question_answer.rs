@@ -33,7 +33,7 @@ pub struct QuestionAnswer<S: AsRef<str>> {
 }
 
 impl<S: AsRef<str>> QuestionAnswer<S> {
-    /// Creates a new `QuestionAnswer` instance.
+    /// Creates ja new `QuestionAnswer` instance.
     pub fn new(client: reqwest::blocking::Client, token: &str, api_url: S) -> Self {
         let mut headers = HeaderMap::new();
         headers.insert(
