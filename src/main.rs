@@ -11,7 +11,7 @@ mod question_answer;
 mod transcribe;
 
 fn main() -> Result<()> {
-    dotenv().ok();
+    dotenv()?;
     let api_token = env::var("API_TOKEN").map_err(|_| anyhow!("API_TOKEN not set."))?;
 
     match AssemblyCLI::parse() {

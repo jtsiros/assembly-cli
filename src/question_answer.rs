@@ -26,15 +26,15 @@ pub struct Answer {
 
 #[derive(Debug)]
 /// A client for interacting with the AssemblyAI question and answer service.
-pub struct QuestionAnswer<S: AsRef<str>> {
+pub struct QuestionAnswer<'a> {
     client: reqwest::blocking::Client,
     headers: HeaderMap,
-    api_url: S,
+    api_url: &'a str,
 }
 
-impl<S: AsRef<str>> QuestionAnswer<S> {
+impl<'a> QuestionAnswer<'a> {
     /// Creates ja new `QuestionAnswer` instance.
-    pub fn new(client: reqwest::blocking::Client, token: &str, api_url: S) -> Self {
+    pub fn new(client: reqwest::blocking::Client, token: &str, api_url: &'a str) -> Self {
         let mut headers = HeaderMap::new();
         headers.insert(
             reqwest::header::AUTHORIZATION,
@@ -62,7 +62,7 @@ impl<S: AsRef<str>> QuestionAnswer<S> {
 
         let response = self
             .client
-            .post(self.api_url.as_ref())
+            .post(self.api_url)
             .headers(self.headers.clone())
             .json(&data)
             .send()?;
@@ -97,7 +97,7 @@ pub fn run(token: &str, args: QuestionArgs) -> Result<()> {
     let api_url = env::var("QUESTION_URL").map_err(|_| anyhow!("QUESTION_URL not set."))?;
 
     let client = Client::new();
-    let qa = QuestionAnswer::new(client, token, api_url);
+    let qa = QuestionAnswer::new(client, token, &api_url);
     let questions = read_questions_from_file(args.questions_file_path)?;
     qa.ask(args.transcript_id, questions)
 }
@@ -110,7 +110,10 @@ fn read_questions_from_file(file_path: impl AsRef<Path>) -> Result<Vec<Question>
             format!("failed to open file {:#?}: {}", file_path.as_ref(), e),
         )
     })?;
-    // Deserialize the string to Vec<Question>
-    let questions: Vec<Question> = serde_json::from_str(&file_content)?;
-    Ok(questions)
+    serde_json::from_str(&file_content).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("failed to parse JSON: {}", e),
+        )
+    })
 }
